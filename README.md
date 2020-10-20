@@ -16,20 +16,18 @@ type
   TForm1 = class(TForm)
   private
     FAutoUpdater: IksAutoUpdater;
-	procedure DoUpdateFound(Sender: TObject; AETag: string);
+    procedure DoUpdateFound(Sender: TObject; AETag: string);
   public
     ...
   end;
 
 
-
 constructor TForm1.Create(AOwner: TComponent);
 begin
   FAutoUpdater := CreateAutoUpdater('https://eres.s3-eu-west-1.amazonaws.com/blah/blah/yourExe.exe',
-	    						    LastStoredETag,
-								    10,
-								    DoUpdateFound);
-
+	    			    LastStoredETag,
+				    10,
+				    DoUpdateFound);
 end;
 
 
@@ -37,8 +35,8 @@ procedure TForm1.DoUpdateFound(Sender: TObject; AETag: string);
 begin
   if (MessageDlg('Update found!'+#13+#10+''+#13+#10+'Install update now?', mtConfirmation, [mbYes, mbNo], 0) = mrYes) then 
   begin
-	// you will  want to store the AEtag parameter in an ini file (or DB) so it can be read the next time the application loads 
-	// to prevent unnessessary downloading of the same *.exe again.
+    // you will  want to store the AEtag parameter in an ini file (or DB) so it can be read the next time the application loads 
+    // to prevent unnessessary downloading of the same *.exe again.
 
     FAutoUpdater.DoUpdate(True);	
   end;
