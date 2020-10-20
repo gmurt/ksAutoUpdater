@@ -3,7 +3,7 @@ Easy to use interface for adding auto-update functionality to your Delphi applic
 
 The interface uses the ETag of the remote file to determine if it is different to the one running. If it finds a different ETag to the one stored locally, then it will download the updated version and can also check the build of the updated version before updating to ensure it's a newer version.
 
-If will check for an update 5 seconds after creating, then it will use the "interval" seconds passed as the parameter when creating.
+It will check for an update 5 seconds after creation, then it will use the "interval" seconds which was passed as the parameter to the CreateAutoUpdater call.
 
 Note: I use the Amazon S3 service to host my update files. If you plan on using another storage service, this should work provided it supports the ETag property.
 
