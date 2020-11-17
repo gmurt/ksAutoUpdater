@@ -258,7 +258,7 @@ end;
 procedure  TksAutoUpdater.CreateTimer;
 begin
   FTimer := TTimer.Create(nil);
-  FTimer.Interval := 5000;
+  FTimer.Interval := 3000;
   FTimer.OnTimer := OnTimer;
   FTimer.Enabled := True;
 end;
