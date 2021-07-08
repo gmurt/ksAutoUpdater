@@ -3,14 +3,15 @@ unit ksAutoUpdater;
 interface
 
 type
-  TksUpdateAvailableEvent = reference to procedure(Sender: TObject; AETag: string);
+  TksUpdateAvailableEvent = reference to procedure(Sender: TObject; AETag, AVersion: string);
 
   IksAutoUpdater = interface
     function GetETag: string;
     function GetUpdateUrl: string;
     procedure SetUpdateUrl(const Value: string);
+    function CheckForUpdate: Boolean;
     function UpdateAvailable: Boolean;
-    procedure DoUpdate(const AReplaceRunningExe: Boolean = False);
+    procedure DoUpdate(const AReplaceRunningExe: Boolean = False; const AParams: string = '');
     property UpdateURL: string read GetUpdateUrl write SetUpdateUrl;
     property ETag: string read GetETag;
   end;
@@ -51,7 +52,8 @@ type
                        AOnUpdateAvailable: TksUpdateAvailableEvent); virtual;
     destructor Destroy; override;
     function UpdateAvailable: Boolean;
-    procedure DoUpdate(const AReplaceRunningExe: Boolean = False);
+    function CheckForUpdate: Boolean;
+    procedure DoUpdate(const AReplaceRunningExe: Boolean = False; const AParams: string = '');
     property UpdateUrl: string read GetUpdateUrl write SetUpdateUrl;
     property ETag: string read GetETag;
   end;
@@ -148,7 +150,7 @@ begin
   inherited;
 end;
 
-procedure TksAutoUpdater.DoUpdate(const AReplaceRunningExe: Boolean = False);
+procedure TksAutoUpdater.DoUpdate(const AReplaceRunningExe: Boolean = False; const AParams: string = '');
 begin
   if AReplaceRunningExe then
   begin
@@ -163,7 +165,7 @@ begin
     if CopyFile(PWideChar(FNewFile), PWideChar(ParamStr(0)), False) then
     begin
       Sleep(1000);
-      ShellExecute(0, nil, PChar(ParamStr(0)), nil, nil, SW_SHOWNORMAL);
+      ShellExecute(0, nil, PChar(ParamStr(0)), PWideChar(AParams), nil, SW_SHOWNORMAL);
       DeleteFile(FNewFile);
       FUpdateAvailable := False;
       FNewFile := '';
@@ -192,56 +194,66 @@ begin
   FUpdateUrl := Value;
 end;
 
-
-procedure TksAutoUpdater.OnTimer(Sender: TObject);
+function TksAutoUpdater.CheckForUpdate: Boolean;
 var
-  AHttp: THttpClient;
-  AStream: TMemoryStream;
+  AHttp: THTTPClient;
   AResponse: IHTTPResponse;
+  AStream: TMemoryStream;
 begin
-  FTimer.Enabled := False;
-  TThread.CreateAnonymousThread(
-    procedure
-    begin
-      try
-        AHttp := THTTPClient.Create;
+  Result := False;
+  try
+    AHttp := THTTPClient.Create;
+    try
+      AResponse := AHttp.Head(FUpdateUrl);
+      if (AResponse.StatusCode = 200) and (AResponse.HeaderValue['ETag'] <> FETag) then
+      begin
+        AStream := TMemoryStream.Create;
         try
-          AResponse := AHttp.Head(FUpdateUrl);
-          if (AResponse.StatusCode = 200) and (AResponse.HeaderValue['ETag'] <> FETag) then
+          AResponse := AHttp.Get(FUpdateUrl, AStream);
+          if AResponse.StatusCode = 200 then
           begin
-            AStream := TMemoryStream.Create;
-            try
-              AResponse := AHttp.Get(FUpdateUrl, AStream);
-              if AResponse.StatusCode = 200 then
-              begin
-                FETag := AResponse.HeaderValue['ETag'];
-                FNewFile := ChangeFileExt(TPath.GetTempFileName, '.exe');
-                AStream.SaveToFile(FNewFile);
-                if (GetApplicationBuild(FNewFile) > GetApplicationBuild) or (FCheckBuild = False) then
+            FETag := AResponse.HeaderValue['ETag'];
+            FNewFile := ChangeFileExt(TPath.GetTempFileName, '.exe');
+            AStream.SaveToFile(FNewFile);
+            if (GetApplicationBuild(FNewFile) > GetApplicationBuild) or (FCheckBuild = False) then
+            begin
+              Result := True;
+              TThread.Queue(nil,
+                procedure
                 begin
-                  FUpdateAvailable := True;
-                  TThread.Queue(nil,
-                    procedure
-                    begin
-                      if Assigned(FUpdateAvailableEvent) then
-                        FUpdateAvailableEvent(Self, FETag);
-                    end
-                  );
-                end;
-              end;
-            finally
-              AStream.Free;
+                  if Assigned(FUpdateAvailableEvent) then
+                    FUpdateAvailableEvent(Self, FETag, GetApplicationBuild(FNewFile).ToString);
+                end
+              );
             end;
           end;
         finally
-          AHttp.Free;
+          AStream.Free;
         end;
-      except
-        //
       end;
+    finally
+      AHttp.Free;
+    end;
+  except
+    //
+  end;
+end;
+
+procedure TksAutoUpdater.OnTimer(Sender: TObject);
+begin
+  if FUpdateAvailable  then
+    Exit;
+
+  FTimer.Enabled := False;
+
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      FUpdateAvailable := CheckForUpdate;
+
       if FUpdateAvailable = False then
       begin
-        TThread.Queue(nil,
+        TThread.Synchronize(nil,
           procedure
           begin
             FTimer.Interval := FIntervalSeconds*1000;
@@ -269,3 +281,5 @@ begin
 end;
 
 end.
+
+
